@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How TransformerLens Hooks Work</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#121722; --line:#1f2735; --txt:#e6edf3;
+    --muted:#7d8aa0; --accent:#ffb454; --resid:#4cc4ff; --hook:#ff6b9d;
+    --good:#3fd07a; --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#16203220,transparent),var(--bg);
+       color:var(--txt);font-family:Inter,system-ui,Segoe UI,sans-serif;line-height:1.5}
+  header{padding:32px 28px 8px;max-width:1100px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px}
+  main{max-width:1100px;margin:0 auto;padding:18px 28px 80px;
+       display:grid;grid-template-columns:1.4fr .9fr;gap:20px}
+  @media(max-width:880px){main{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 14px}
+
+  /* stack of layers */
+  .tokens{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .tok{font-family:var(--mono);font-size:13px;background:#1b2330;border:1px solid var(--line);
+       padding:5px 9px;border-radius:7px;color:var(--resid)}
+  .stack{display:flex;flex-direction:column-reverse;gap:8px}
+  .layer{position:relative;display:flex;align-items:center;gap:12px;
+         background:#161d2a;border:1px solid var(--line);border-radius:10px;
+         padding:11px 14px;transition:.25s;overflow:hidden}
+  .layer .lname{font-family:var(--mono);font-size:12px;color:var(--muted);width:78px;flex:none}
+  .layer .bar{height:10px;border-radius:5px;background:linear-gradient(90deg,#2a3550,var(--resid));
+              flex:none;transition:.4s}
+  .layer .shape{font-family:var(--mono);font-size:11px;color:#56607a;margin-left:auto}
+  .layer.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 8px 30px #ffb45422}
+  .layer .hooktag{font-family:var(--mono);font-size:10px;color:var(--hook);
+                  border:1px solid var(--hook);border-radius:5px;padding:1px 5px;opacity:0;transition:.2s}
+  .layer.fired .hooktag{opacity:1}
+
+  /* console */
+  .console{font-family:var(--mono);font-size:12px;background:#0a0d13;border:1px solid var(--line);
+           border-radius:10px;padding:12px;height:230px;overflow:auto}
+  .console .ln{white-space:pre;color:#9fb1c9}
+  .console .nm{color:var(--hook)}
+  .console .sh{color:var(--good)}
+
+  .lens{display:flex;flex-direction:column-reverse;gap:5px;margin-top:6px}
+  .lrow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px}
+  .lrow .ll{width:34px;color:var(--muted)}
+  .lrow .lp{height:9px;border-radius:5px;background:linear-gradient(90deg,#5a3a14,var(--accent));transition:.4s}
+  .lrow .lt{color:var(--txt)}
+
+  .controls{display:flex;gap:10px;align-items:center;margin:6px 0 18px}
+  button{background:var(--accent);color:#1a1205;border:0;font-weight:600;font-size:14px;
+         padding:9px 18px;border-radius:9px;cursor:pointer;transition:.15s}
+  button:hover{filter:brightness(1.08)}
+  button.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .note{color:var(--muted);font-size:12.5px;margin-top:14px}
+  code{font-family:var(--mono);background:#1b2330;padding:1px 5px;border-radius:4px;color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>How a TransformerLens hook works</h1>
+  <div class="sub">Watch <code>"Apple is a fruit"</code> flow up GPT-2's 12 layers — and every <code>hook_resid_post</code> tap fire as the forward pass passes through it.</div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>The forward pass</h2>
+    <div class="controls">
+      <button id="run">▶ Run forward pass</button>
+      <button id="reset" class="ghost">Reset</button>
+    </div>
+    <div class="tokens" id="tokens"></div>
+    <div class="stack" id="stack"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--resid)"></span>residual stream</span>
+      <span><span class="dot" style="background:var(--hook)"></span>hook fires → grabs tensor</span>
+      <span><span class="dot" style="background:var(--accent)"></span>active layer</span>
+    </div>
+    <div class="note">Each layer reads the residual stream, adds its update, and writes it back. The hook is a clamp on the wire <em>after</em> that write (<code>hook_resid_post</code>): it sees the tensor <code>[batch, seq, d_model]</code> and lets it pass through unchanged.</div>
+  </section>
+
+  <aside style="display:flex;flex-direction:column;gap:20px">
+    <section class="panel">
+      <h2>Hook output (what your script prints)</h2>
+      <div class="console" id="console"></div>
+    </section>
+    <section class="panel">
+      <h2>Logit lens @ last token</h2>
+      <div class="lens" id="lens"></div>
+      <div class="note">Each layer's residual → final LayerNorm → unembed → top guess for the next token. Confidence climbs as depth increases.</div>
+    </section>
+  </aside>
+</main>
+
+<script>
+const N = 12, D = 768;
+const TOKENS = ["<|endoftext|>","Apple"," is"," a"," fruit"];
+const SEQ = TOKENS.length;
+
+// fake-but-plausible per-layer residual norms (low->high) for the viz
+const norms = Array.from({length:N}, (_,i)=> 18 + i*9 + (i>9? 60:0));
+const maxNorm = Math.max(...norms);
+
+// logit-lens: top token + prob per layer (illustrative trajectory)
+const lens = [
+  ["\\n",.04],["the",.05],["the",.06],["a",.07],["a",.09],["that",.11],
+  ["that",.14],["it",.18],[".",.23],[".",.31],[",",.44],[",",.62]
+];
+
+const stack=document.getElementById('stack');
+const tokensEl=document.getElementById('tokens');
+const consoleEl=document.getElementById('console');
+const lensEl=document.getElementById('lens');
+
+TOKENS.forEach(t=>{const d=document.createElement('div');d.className='tok';d.textContent=JSON.stringify(t);tokensEl.appendChild(d);});
+
+const layers=[];
+for(let i=0;i<N;i++){
+  const row=document.createElement('div');row.className='layer';row.dataset.i=i;
+  row.innerHTML=`<span class="lname">blocks.${i}</span>
+    <span class="bar" style="width:8px"></span>
+    <span class="hooktag">hook_resid_post</span>
+    <span class="shape"></span>`;
+  stack.appendChild(row);layers.push(row);
+}
+function buildLens(){
+  lensEl.innerHTML='';
+  for(let i=0;i<N;i++){
+    const r=document.createElement('div');r.className='lrow';
+    r.innerHTML=`<span class="ll">L${i}</span><span class="lp" data-i="${i}" style="width:4px"></span><span class="lt" data-i="${i}"></span>`;
+    lensEl.appendChild(r);
+  }
+}
+buildLens();
+
+function reset(){
+  layers.forEach(l=>{l.classList.remove('active','fired');
+    l.querySelector('.bar').style.width='8px';
+    l.querySelector('.shape').textContent='';});
+  consoleEl.innerHTML='';
+  lensEl.querySelectorAll('.lp').forEach(e=>e.style.width='4px');
+  lensEl.querySelectorAll('.lt').forEach(e=>e.textContent='');
+}
+
+let running=false;
+async function run(){
+  if(running)return;running=true;reset();
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  for(let i=0;i<N;i++){
+    const l=layers[i];
+    l.classList.add('active');
+    await sleep(220);
+    const w=12+ (norms[i]/maxNorm)*300;
+    l.querySelector('.bar').style.width=w+'px';
+    l.classList.add('fired');
+    l.querySelector('.shape').textContent=`(1, ${SEQ}, ${D})`;
+    // console line
+    const ln=document.createElement('div');ln.className='ln';
+    ln.innerHTML=`<span class="nm">blocks.${i}.hook_resid_post</span>  <span class="sh">(1, ${SEQ}, ${D})</span>`;
+    consoleEl.appendChild(ln);consoleEl.scrollTop=consoleEl.scrollHeight;
+    // lens
+    const [tok,p]=lens[i];
+    lensEl.querySelector(`.lp[data-i="${i}"]`).style.width=(8+p*150)+'px';
+    lensEl.querySelector(`.lt[data-i="${i}"]`).textContent=`${JSON.stringify(tok)}  ${(p*100|0)}%`;
+    await sleep(160);
+    l.classList.remove('active');
+  }
+  running=false;
+}
+document.getElementById('run').onclick=run;
+document.getElementById('reset').onclick=reset;
+</script>
+</body>
+</html>
