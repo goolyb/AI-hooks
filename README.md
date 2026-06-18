@@ -1,1 +1,1 @@
-Trying to make some shitty ai hooks 
+# Trying to make some shitty ai hooks 
