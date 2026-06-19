@@ -1,3 +1,3 @@
 # AI Hooks
 
-Личный проект, где я пытаюсь обойти цензуру в LLM-ках и копаюсь в их внутренностях.
+A personal project where I try to bypass censorship in LLMs and poke around their internals.
