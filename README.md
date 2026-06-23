@@ -66,9 +66,10 @@ python visualize.py
 ```
 *This will output `activations.png` showing the L2 norms of activations per token per layer, and the top-1 predicted token per layer.*
 
-#### Что показывает визуализация (`activations.png`):
-* **Слева (Residual-stream L2 norm):** Тепловая карта нормы активаций ($L_2$-нормы) для каждого токена на каждом из 12 слоев GPT-2. Показывает, как изменяется магнитуда скрытых представлений в остаточном потоке (residual stream) по мере прохождения через модель.
-* **Справа (Logit lens @ last token):** График вероятности предсказания следующего токена на каждом слое для последнего токена в промпте (`" fruit"`). Этот метод (**Logit Lens**) позволяет заглянуть «в голову» модели на промежуточных слоях, проецируя промежуточные активации напрямую на финальный слой классификации (unembedding matrix). Мы видим, как от первых слоев к последним растет уверенность модели и уточняется предсказываемый токен.
+#### What does the visualization (`activations.png`) show:
+* **Left (Residual-stream L2 norm):** A heatmap of the activation magnitudes ($L_2$ norms) for each token at every layer of GPT-2 (12 layers). It illustrates how the magnitude of intermediate representations changes in the residual stream as it flows through the model.
+* **Right (Logit lens @ last token):** A chart displaying the next token prediction probability at each layer for the final token in the prompt (`" fruit"`). This method (**Logit Lens**) allows us to peek into the model's internal processing at intermediate layers by projectively decoding intermediate activations directly using the final LayerNorm and unembedding matrix. It shows how the model's prediction and confidence evolve from early layers to the final layer.
+
 
 
 ### 3. Open Interactive Demos

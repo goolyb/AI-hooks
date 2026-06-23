@@ -10,7 +10,7 @@ models = [
 
 for i, m in enumerate(models):
     print(f"{i}. {m}")
-choice = int(input("выбери модель (0/1/2): "))
+choice = int(input("choose a model (0/1/2): "))
 model_name = models[choice]
 
 model = TransformerBridge.boot_transformers(model_name, device="cpu")

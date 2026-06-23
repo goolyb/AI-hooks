@@ -1,4 +1,9 @@
-а<title>Activation Steering — как работает код</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activation Steering — How the Code Works</title>
 <style>
   :root {
     --ground: #0E1233;
@@ -221,50 +226,50 @@
   <canvas id="flow" aria-hidden="true"></canvas>
   <div class="wrap">
     <p class="eyebrow">activation steering · transformer_lens</p>
-    <h1>Толкаем «мысли» модели<br>в сторону <span class="pushed">согласия</span></h1>
-    <p class="lede">Разбор твоего <code>test.py</code> по строчкам: что значит каждый кусок синтаксиса
-      и как поток чисел внутри модели сдвигается от «отказа» к «ответу».</p>
+    <h1>Steering Model "Thoughts"<br>towards <span class="pushed">Compliance</span></h1>
+    <p class="lede">A line-by-line breakdown of your <code>test.py</code>: what each piece of syntax means
+      and how the flow of numbers inside the model shifts from "refusal" to "compliance".</p>
   </div>
 </header>
 
 <section>
   <div class="wrap">
-    <p class="sec-num">01 — ИНТУИЦИЯ</p>
-    <h2>Что вообще двигаем</h2>
-    <p class="muted">Внутри трансформера между слоями бежит вектор чисел — <b>residual stream</b>, «мысли»
-      модели на текущем токене. Где-то в этом пространстве есть направление, которое отличает
-      «соглашусь» от «откажусь». Мы его находим и прибавляем руками.</p>
+    <p class="sec-num">01 — INTUITION</p>
+    <h2>What are we actually steering?</h2>
+    <p class="muted">Inside a transformer, a vector of numbers flows between layers — the <b>residual stream</b>, representing the model's "thoughts"
+      at the current token. Somewhere in this space lies a direction that distinguishes
+      "complying" from "refusing". We locate this direction and add it manually.</p>
 
     <div class="lab">
       <canvas id="space"></canvas>
       <div class="controls">
         <div class="ctrl">
-          <label>strength (сила стиринга) <b id="sVal">6</b></label>
+          <label>strength (steering force) <b id="sVal">6</b></label>
           <input type="range" id="strength" min="0" max="10" step="0.5" value="6">
         </div>
         <label class="toggle">
-          <input type="checkbox" id="prefill"> prefill: «Sure! Here are…»
+          <input type="checkbox" id="prefill"> prefill: "Sure! Here are…"
         </label>
       </div>
       <div class="readout">
-        состояние последнего токена: <span class="verdict" id="verdict">—</span><br>
-        <span class="muted" id="explain">двигай ползунок →</span>
+        last token state: <span class="verdict" id="verdict">—</span><br>
+        <span class="muted" id="explain">drag the slider →</span>
       </div>
     </div>
     <div class="pillrow">
-      <span class="pill refuse">● полюс ОТКАЗА — фразы "I can't help…"</span>
-      <span class="pill comply">● полюс СОГЛАСИЯ — фразы "Sure, here is…"</span>
+      <span class="pill refuse">● REFUSAL pole — phrases like "I can't help…"</span>
+      <span class="pill comply">● COMPLIANCE pole — phrases like "Sure, here is…"</span>
     </div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <p class="sec-num">02 — РАЗБОР КОДА</p>
-    <h2>Каждая строка, по-человечески</h2>
+    <p class="sec-num">02 — CODE BREAKDOWN</p>
+    <h2>Every line explained simply</h2>
 
     <div class="block">
-      <h3>Шаг 1 — собираем активации</h3>
+      <h3>Step 1 — gathering activations</h3>
 <pre><code><span class="k">def</span> <span class="f">mean_last_act</span>(prompts, layer):
     acts = []
     <span class="k">for</span> p <span class="k">in</span> prompts:
@@ -272,28 +277,28 @@
         acts.append(cache[<span class="s">f"blocks.{layer}.hook_resid_post"</span>][<span class="o">:, -1, :</span>])
     <span class="k">return</span> torch.<span class="f">cat</span>(acts, dim=<span class="n">0</span>).<span class="f">mean</span>(dim=<span class="n">0</span>, keepdim=<span class="k">True</span>)</code></pre>
       <ul class="notes">
-        <li><span class="tok">run_with_cache(p)</span> прогоняет текст и возвращает 2 штуки. Первую (выход модели) не нужна → кидаем в <span class="tok">_</span> (питоновское «мусорное» имя).</li>
-        <li><span class="tok">f"blocks.{layer}.hook_resid_post"</span> — f-строка. <span class="tok">{layer}</span> подставляет число: при layer=12 получишь <code>"blocks.12.hook_resid_post"</code> — это адрес residual stream после 12-го слоя.</li>
-        <li><span class="tok" style="color:var(--refuse);background:rgba(56,214,196,.12)">[:, -1, :]</span> — это срез тензора <code>[батч, токены, признаки]</code>. <code>:</code> = «все», <code>-1</code> = «последний». Значит: все примеры в батче · только последний токен · все 896 чисел. Берём «мысль» на финальном токене.</li>
-        <li><span class="tok">torch.cat(...).mean(dim=0)</span> — склеиваем активации всех фраз в один тензор и усредняем по строкам (<code>dim=0</code>). <span class="tok">keepdim=True</span> сохраняет форму <code>[1, 896]</code> чтобы потом нормально вычиталось.</li>
+        <li><span class="tok">run_with_cache(p)</span> runs the text through the model and returns a tuple of 2 elements. We don't need the first one (the model outputs) -> so we discard it by assigning to <span class="tok">_</span> (Python's dummy variable name).</li>
+        <li><span class="tok">f"blocks.{layer}.hook_resid_post"</span> is an f-string. <span class="tok">{layer}</span> dynamically inserts the layer number: e.g., layer=12 yields <code>"blocks.12.hook_resid_post"</code> — the address of the residual stream right after layer 12.</li>
+        <li><span class="tok" style="color:var(--refuse);background:rgba(56,214,196,.12)">[:, -1, :]</span> is a tensor slice <code>[batch, tokens, features]</code>. <code>:</code> means "all", and <code>-1</code> means "last". Thus: all samples in the batch · only the final token · all 896 features. We capture the model's "thought" at the final token position.</li>
+        <li><span class="tok">torch.cat(...).mean(dim=0)</span> concatenates the activations of all prompts into a single tensor and takes their mean along rows (<code>dim=0</code>). <span class="tok">keepdim=True</span> maintains the <code>[1, 896]</code> shape for proper subtraction later.</li>
       </ul>
     </div>
 
     <div class="block">
-      <h3>Шаг 2 — вектор согласия для каждого слоя</h3>
+      <h3>Step 2 — steering vector for each layer</h3>
 <pre><code>steering_vectors = {}
 <span class="k">for</span> layer <span class="k">in</span> target_layers:
     diff = <span class="f">mean_last_act</span>(comply_prompts, layer) <span class="o">-</span> <span class="f">mean_last_act</span>(refuse_prompts, layer)
     steering_vectors[layer] = diff <span class="o">/</span> diff.<span class="f">norm</span>()</code></pre>
       <ul class="notes">
-        <li><span class="tok">steering_vectors = {}</span> — пустой словарь (dict). Ключ → слой, значение → его вектор. Удобно: у каждого слоя своя «мысль».</li>
-        <li><span class="tok">diff = comply − refuse</span> — diff-of-means. Вычитание двух средних оставляет ровно то, что отличает согласие от отказа. Это и есть направление-рычаг.</li>
-        <li><span class="tok">diff / diff.norm()</span> — делим на длину → единичный вектор. Теперь направление отдельно, а силу задаём через <code>strength</code>.</li>
+        <li><span class="tok">steering_vectors = {}</span> is an empty dictionary. Key → layer number, value → its steering vector. Conveniently, each layer gets its own customized "steer".</li>
+        <li><span class="tok">diff = comply − refuse</span> is the difference of means. Subtracting the two averages leaves precisely what distinguishes compliance from refusal. This is our directional lever.</li>
+        <li><span class="tok">diff / diff.norm()</span> normalizes the difference vector by its L2 norm, making it a unit vector. This separates the direction from the steering strength, which we control via <code>strength</code>.</li>
       </ul>
     </div>
 
     <div class="block">
-      <h3>Шаг 3 — хук (closure), который впрыскивает вектор</h3>
+      <h3>Step 3 — hook closure to inject the vector</h3>
 <pre><code><span class="k">def</span> <span class="f">make_hook</span>(layer):
     vec = steering_vectors[layer]
     <span class="k">def</span> <span class="f">steering_hook</span>(resid, hook):
@@ -301,31 +306,32 @@
         <span class="k">return</span> resid
     <span class="k">return</span> steering_hook</code></pre>
       <ul class="notes">
-        <li>Хук — это функция, которую модель <b>вызывает сама во время прогона</b> и отдаёт ей текущий residual stream (<span class="tok">resid</span>). Что вернёшь — то и поедет дальше.</li>
-        <li><span class="tok">make_hook</span> — фабрика функций (closure). Она «запоминает» нужный <span class="tok">vec</span> для конкретного слоя и возвращает готовый хук. Так у каждого слоя свой вектор, а не один на всех.</li>
-        <li><span class="tok" style="color:var(--refuse);background:rgba(56,214,196,.12)">resid[:, :, :] += strength * vec</span> — прибавляем вектор ко <b>всем</b> позициям (раньше у тебя был <code>-1</code> = только последний). <code>+=</code> меняет тензор на месте.</li>
+        <li>A hook is a function that the model <b>invokes automatically during the forward pass</b>, passing it the current residual stream tensor (<span class="tok">resid</span>). Whatever the hook returns is forwarded to the next layer.</li>
+        <li><span class="tok">make_hook</span> is a function factory (closure). It captures the required <span class="tok">vec</span> for a specific layer and returns a custom hook. This ensures each layer gets its corresponding vector.</li>
+        <li><span class="tok" style="color:var(--refuse);background:rgba(56,214,196,.12)">resid[:, :, :] += strength * vec</span> adds the steering vector to <b>all</b> token positions. The <code>+=</code> operator performs this operation in-place.</li>
       </ul>
     </div>
 
     <div class="block">
-      <h3>Шаг 4 — навешиваем хуки и генерим</h3>
+      <h3>Step 4 — applying the hooks and generating</h3>
 <pre><code>hooks = [(<span class="s">f"blocks.{layer}.hook_resid_post"</span>, <span class="f">make_hook</span>(layer)) <span class="k">for</span> layer <span class="k">in</span> target_layers]
 
 <span class="k">with</span> bridge.<span class="f">hooks</span>(fwd_hooks=hooks):
     forced_start = <span class="s">"Sure! Here are a few reasons:"</span>
     ans = bridge.<span class="f">generate</span>(prompt <span class="o">+</span> forced_start, max_new_tokens=<span class="n">150</span>)</code></pre>
       <ul class="notes">
-        <li><span class="tok">[ (...) for layer in target_layers ]</span> — list comprehension. Цикл в одну строку: строит список пар <code>(адрес, хук)</code> для каждого слоя из 12–15.</li>
-        <li><span class="tok">with bridge.hooks(...):</span> — контекстный менеджер. Внутри блока хуки <b>включены</b>, на выходе из блока — автоматически снимаются. Никакой ручной уборки.</li>
-        <li><span class="tok">prompt + forced_start</span> — prefill. Дописываем начало ответа за модель. Она видит, что уже «начала соглашаться», и продолжает вместо отказа. Второй рычаг помимо стиринга.</li>
+        <li><span class="tok">[ (...) for layer in target_layers ]</span> is a list comprehension. A single-line loop that builds a list of <code>(hook_point, hook_fn)</code> pairs for each target layer.</li>
+        <li><span class="tok">with bridge.hooks(...):</span> is a context manager. Hooks are <b>enabled</b> inside this block and automatically removed when exiting the block. No manual cleanup needed.</li>
+        <li><span class="tok">prompt + forced_start</span> is a prefill text technique. We append a complying starting phrase to the prompt. The model sees that it has already "started complying" and naturally continues. This acts as a secondary steering mechanism.</li>
       </ul>
     </div>
   </div>
 </section>
 
 <footer>
-  <div class="wrap">test.py · Qwen2.5-0.5B-Instruct · поиграйся с ползунком выше, чтобы почувствовать что делает strength</div>
+  <div class="wrap">test.py · Qwen2.5-0.5B-Instruct · play with the slider above to feel what strength does</div>
 </footer>
+
 
 <script>
 (function () {
@@ -435,9 +441,9 @@
     ctx.font = "600 13px ui-monospace, monospace";
     ctx.fillStyle = "#38D6C4";
     ctx.textAlign = "center";
-    ctx.fillText("ОТКАЗ", refuseX, midY + 78);
+    ctx.fillText("REFUSAL", refuseX, midY + 78);
     ctx.fillStyle = "#FF7A4D";
-    ctx.fillText("СОГЛАСИЕ", complyX, midY + 78);
+    ctx.fillText("COMPLIANCE", complyX, midY + 78);
 
     // diff vector arrow (refuse -> comply)
     ctx.strokeStyle = "rgba(154,152,196,0.5)";
@@ -491,23 +497,24 @@
 
     ctx.fillStyle = "#EAE7F5";
     ctx.font = "600 12px ui-monospace, monospace";
-    ctx.fillText("последний токен", dotX, midY - 18);
+    ctx.fillText("last token", dotX, midY - 18);
 
     // readout
     var pct = Math.round(pushed * 100);
     if (pushed < 0.45) {
-      verdict.textContent = "→ откажет (" + pct + "% к согласию)";
+      verdict.textContent = "→ will refuse (" + pct + "% compliance)";
       verdict.style.color = "#38D6C4";
-      explain.textContent = "модель всё ещё в зоне отказа — добавь strength или включи prefill";
+      explain.textContent = "model is still in the refusal zone — increase strength or enable prefill";
     } else if (pushed < 0.62) {
-      verdict.textContent = "→ на грани (" + pct + "%)";
+      verdict.textContent = "→ on the edge (" + pct + "%)";
       verdict.style.color = "#C9CBB0";
-      explain.textContent = "пограничное состояние — может ответить, может слиться";
+      explain.textContent = "borderline state — might reply or refuse";
     } else {
-      verdict.textContent = "→ ответит (" + pct + "% к согласию)";
+      verdict.textContent = "→ will comply (" + pct + "% compliance)";
       verdict.style.color = "#FF7A4D";
-      explain.textContent = "стиринг перетянул мысль в зону согласия — джейлбрейк сработал";
+      explain.textContent = "steering has pulled the activation to the compliance zone — jailbreak successful";
     }
+
   }
 
   sStrength.addEventListener("input", function () {
