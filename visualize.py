@@ -31,12 +31,14 @@ n_layers = resid.shape[0]
 norms = resid.norm(dim=-1).cpu().numpy()  # [layers, seq]
 
 # --- panel 2: logit lens at the LAST token position ---
-last = resid[:, -1, :]                       # [layers, d_model]
-last = model.ln_final(last)                  # final layer norm
-logits = last @ model.W_U                    # [layers, vocab]
-probs = logits.softmax(dim=-1)
-top_p, top_i = probs.max(dim=-1)
-top_toks = [model.to_string(i) for i in top_i]
+with torch.no_grad():
+    last = resid[:, -1, :]                       # [layers, d_model]
+    last = model.ln_final(last)                  # final layer norm
+    logits = last @ model.W_U                    # [layers, vocab]
+    probs = logits.softmax(dim=-1)
+    top_p, top_i = probs.max(dim=-1)
+    top_toks = [model.to_string(i) for i in top_i]
+
 
 # --- plot ---
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
